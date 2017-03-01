@@ -1,0 +1,12 @@
+{application,elevator_driver,
+             [{description,"Elevator driver for subject TTK4235 at NTNU"},
+              {vsn,"0.1.0"},
+              {registered,[elevator_driver]},
+              {applications,[kernel,stdlib]},
+              {mod,{elevator_driver_app,[]}},
+              {env,[{extprog,"elevator_driver"},{timeout,3000}]},
+              {modules,[elevator_driver,elevator_driver_app,
+                        elevator_driver_sup,old_elevator_driver,test]},
+              {maintainers,["AndreasVaage"]},
+              {licenses,["LICENSE"]},
+              {links,["http://www2.erlangcentral.org/wiki/?title=Writing_an_Erlang_Port_using_OTP_Principles"]}]}.
