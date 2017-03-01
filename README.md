@@ -4,8 +4,8 @@ Elevator driver used to control the elevators at the real time lab at NTNU. Impl
 
 ## Usage
 The driver includes an elevator poller which requires two callback functions to call when an event occurs: Currently they are:
-	environment_controller:event_reached_new_floor(CurrentFloor)
-	environment_controller:event_button_pressed({Button, Floor})
+environment_controller:event_reached_new_floor(CurrentFloor)
+environment_controller:event_button_pressed({Button, Floor})
 
 ## License
 

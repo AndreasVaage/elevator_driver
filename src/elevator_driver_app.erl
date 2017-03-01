@@ -7,7 +7,7 @@
          stop/1]).
  
 start(_Type, _Args) ->
-	{ok, Environment} = application:get_env(beastly_elevator, environment),
+	{ok, Environment} = application:get_env(elevator_driver, environment),
     PrivDir = code:priv_dir(elevator_driver),
     {ok, ExtProg} = application:get_env(elevator_driver, extprog),
     ExtProgWithPath = filename:join([PrivDir, ExtProg]),

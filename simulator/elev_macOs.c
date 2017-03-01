@@ -21,7 +21,6 @@ void elev_init(elev_type e) {
         con_val("com_ip",   ip,   "%s")
         con_val("com_port", port, "%s")
     )
-    
     pthread_mutex_init(&sockmtx, NULL);
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
