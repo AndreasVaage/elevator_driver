@@ -32,7 +32,7 @@ OBJECTS = $(SOURCES:%.c=%.o)
 TARGET = $(C_SRC_OUTPUT)
 
 # top-level rule, to compile everything.
-all: $(SOURCES)
+all:$(TARGET)
 
 # rule to link the program
 $(TARGET): $(OBJECTS)
@@ -44,9 +44,10 @@ $(TARGET): $(OBJECTS)
 
 # rule for cleaning re-compilable files.
 clean:
-	rm -f $(TARGET) $(OBJECTS)
+	rm -f $(OBJECTS)
 
-rebuild:	clean all
+rebuild:
+	clean all
 
 .PHONY: all rebuild clean
 

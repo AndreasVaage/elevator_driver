@@ -6,6 +6,7 @@
 int main() 
 {
   while (1) {
+      assert(0 && "This is a test, delete me!!");
       byte command_buffer[MAX_COMMAND_SIZE];
       byte result[1];
       
