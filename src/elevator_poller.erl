@@ -1,5 +1,8 @@
 -module(elevator_poller).
 
+-callback event_button_pressed({Button :: atom(), Floor :: integer()}) -> ok.
+-callback event_reached_new_floor(Floor :: integer()) -> ok.
+
 -behaviour (gen_statem).
 -define (NAME, elevator_poller).
 
@@ -49,7 +52,8 @@ create_event_if_button_pressed({Floor, Button, LastValue}) ->
         LastValue -> %No state change
             {Floor, Button, LastValue};
         1 -> %Button pressed
-            environment_controller:event_button_pressed({Button, Floor}),
+            Mod = get_env(callback_module),
+            Mod:event_button_pressed({Button, Floor}),
             {Floor, Button, 1};
         0 -> %Button released
             {Floor, Button, 0};
@@ -63,7 +67,8 @@ create_event_if_floor_changed(LastFloor, TopFloor) ->
         CurrentFloor =:= LastFloor; CurrentFloor =:= 255 -> %No state change
             LastFloor;
         is_integer(CurrentFloor), CurrentFloor >= 0, CurrentFloor =< TopFloor ->
-            environment_controller:event_reached_new_floor(CurrentFloor),
+            Mod = get_env(callback_module),
+            Mod:event_reached_new_floor(CurrentFloor),
             CurrentFloor;
         true -> 
             io:format("Wrong return value from get_floor: ~p~n",[CurrentFloor]),

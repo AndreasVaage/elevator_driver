@@ -1,5 +1,5 @@
 {application, elevator_driver,
- [{description, "Elevator driver for subject TTK4235 at NTNU"},
+ [{description, "Drives elevators at NTNU"},
   {vsn, "0.1.0"},
   {registered, [elevator_driver]},
   {applications,
@@ -13,7 +13,8 @@
     {number_of_floors,4}, 
     {nuber_of_elevators,1},
     {poll_period, 50},
-    {environment, simulator}
+    {environment, simulator},
+    {callback_module, environment_controller}
     ]},
   {modules,[elevator_driver_app, 
             elevator_driver_sup, 
