@@ -44,7 +44,7 @@ $(TARGET): $(OBJECTS)
 
 # rule for cleaning re-compilable files.
 clean:
-	rm -f $(OBJECTS)
+	rm -f $(TARGET) $(OBJECTS)
 
 rebuild:
 	clean all
