@@ -6,17 +6,16 @@
    [kernel,
     stdlib
    ]},
-   {mod,{elevator_driver_app, []}},
   {env,[
     {extprog, "elevator_driver"},
-    {timeout, 30000},
+    {timeout, 3000},
     {number_of_floors,4}, 
     {nuber_of_elevators,1},
     {poll_period, 50},
     {environment, simulator},
     {callback_module, environment_controller}
     ]},
-  {modules,[elevator_driver_app, 
+  {modules,[elevator_controller, 
             elevator_driver_sup, 
             elevator_driver,
             elevator_poller]},

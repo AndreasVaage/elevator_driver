@@ -21,7 +21,7 @@
          get_button_signal/2,    %up/down/internal , int
          set_door_light/1,       %on/off
          set_floor_indicator/1,  % int
-         set_stop_light/1        % int
+         set_stop_light/1        % on/off
         ]).
 
 %% gen_server callbacks

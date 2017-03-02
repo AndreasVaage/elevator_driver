@@ -9,7 +9,25 @@ Rebar3: add
 {elevator_driver, {git, "https://github.com/AndreasVaage/elevator_driver", {branch, "master"}}} 
 ```
 
-to your dependency list in the rebar.config file.
+to your dependency list in the rebar.config file. Then add the elevator_driver to a supervisors child specifications.
+
+```erlang
+{name :: atom(),
+        {Module :: module(), Start_fun :: function(), Args :: list()},
+        permanent, infinity, supervisor, [elevator_driver_sup]}
+```
+Then in the *Module* you must define the behaviour,
+
+```erlang
+-behaviour(elevator_controller).
+```
+Implement the start function,
+
+```erlang
+Start_fun() ->
+	elevator_controller:start_elevator(Module :: module(), simulator|elevator).
+```
+And the callback functions;
 The driver includes an elevator poller which requires two callback functions to call when an event occurs, currently they are:
 
 ```erlang
@@ -19,13 +37,45 @@ event_button_pressed({Button :: atom(), Floor :: integer()}) -> ok.
 ```erlang
 event_reached_new_floor(Floor :: integer()) -> ok.
 ```
-The module which implements these callback functions must be specified as the *callback_module* in the elevator_driver.app.src env-list. Edit the file directly or use:
+They must be defined in the *Module*.
 
-```erlang
-application:set_env(elevator_driver, callback_module, YourModule :: atom()).
+#Example
+supervisor:
+
+```erlang 
+-module(some_sup).
+-behavior(supervisor).
+-export([start_link/2]).
+-export([init/1]).
+
+start_link(Environment) ->
+    supervisor:start_link({local, ?MODULE}, ?MODULE, Environment).
+ 
+init(Environment) ->
+    {ok, {{one_for_all, 1, 2},
+          [{elevator_driver,
+        	{environment_controller, start_elevator, []},
+       		 permanent, infinity, supervisor, [elevator_driver_sup]}
+            ]}}.
 ```
 
-The driver also includes a [simulator](simulator/README.md) which must be started separately if the driver are to work in _simulator_ mode. 
+User module:
+
+```erlang
+-module(environment_controller).
+-behaviour(elevator_controller).
+start_elevator() ->
+        elevator_controller:start_elevator(?MODULE, simulator).
+
+event_button_pressed(Button) ->
+	io:format("Button ~p was pressed~n",[Button]).
+
+event_reached_new_floor(Floor) -> 
+	io:format("Floor ~p was reached~n",[Floor]).
+```
+
+#Simulator
+The driver also includes a [simulator](https://github.com/TTK4145/Project/tree/master/simulator) which must be started separately if the driver are to work in _simulator_ mode. 
 
 - [ ] This should be done automatic
 

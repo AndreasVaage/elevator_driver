@@ -1,8 +1,5 @@
 -module(elevator_poller).
 
--callback event_button_pressed({Button :: atom(), Floor :: integer()}) -> ok.
--callback event_reached_new_floor(Floor :: integer()) -> ok.
-
 -behaviour (gen_statem).
 -define (NAME, elevator_poller).
 
@@ -15,7 +12,7 @@
 callback_mode() -> state_functions.
 
 get_env(Environment) -> 
-    {ok, Value} = application:get_env(Environment),
+    {ok, Value} = application:get_env(elevator_driver, Environment),
     Value.
 
 start_link(Environment) ->
