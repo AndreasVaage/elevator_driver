@@ -13,7 +13,7 @@ start_link(ExtProg, Environment) ->
     supervisor:start_link({local, ?SERVER},?MODULE, {ExtProg, Environment}).
  
 init({ExtProg, Environment}) ->
-    {ok, {{one_for_all, 1, 2},
+    {ok, {{one_for_all, 0, 2},
           [{elevator_driver, {elevator_driver, start_link, [ExtProg]},
             permanent, 10, worker, [elevator_driver]},
             {elevator_poller, {elevator_poller, start_link, [Environment]},

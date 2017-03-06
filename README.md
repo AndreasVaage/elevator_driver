@@ -14,24 +14,24 @@ to your dependency list in the rebar.config file. Then add the elevator_driver t
 ```erlang
 {name :: atom(),
         {Module :: module(), Start_fun :: function(), Args :: list()},
-        permanent, infinity, supervisor, [elevator_driver_sup]}
+        permanent, infinity|integer(), worker, [elevator_driver]}
 ```
 Then in the *Module* you must define the behaviour,
 
 ```erlang
--behaviour(elevator_controller).
+-behaviour(elevator_driver).
 ```
 Implement the start function,
 
 ```erlang
 Start_fun() ->
-	elevator_controller:start_elevator(Module :: module(), simulator|elevator).
+	elevator_driver:start_elevator(Module :: module(), simulator|elevator).
 ```
 And the callback functions;
 The driver includes an elevator poller which requires two callback functions to call when an event occurs, currently they are:
 
 ```erlang
-event_button_pressed({Button :: atom(), Floor :: integer()}) -> ok.
+event_button_pressed({up|down|internal, Floor :: integer()}) -> ok.
 ```
 
 ```erlang
@@ -39,23 +39,33 @@ event_reached_new_floor(Floor :: integer()) -> ok.
 ```
 They must be defined in the *Module*.
 
-#Example
+###Functions
+
+```erlang
+set_motor_dir(up|down|stop) -> ok.
+set_button_light(up|down|internal, Floor :: integer(), on|off) -> ok.
+set_door_light(on|off) -> ok.
+set_floor_indicator(Floor :: integer()) -> ok.
+set_stop_light(on|off) -> ok.
+```
+
+###Example
 supervisor:
 
 ```erlang 
 -module(some_sup).
 -behavior(supervisor).
--export([start_link/2]).
+-export([start_link/0]).
 -export([init/1]).
 
-start_link(Environment) ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, Environment).
+start_link() ->
+    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
  
-init(Environment) ->
+init([]) ->
     {ok, {{one_for_all, 1, 2},
           [{elevator_driver,
         	{environment_controller, start_elevator, []},
-       		 permanent, infinity, supervisor, [elevator_driver_sup]}
+       		 permanent, 5000, worker, [elevator_driver]}
             ]}}.
 ```
 
@@ -63,18 +73,19 @@ User module:
 
 ```erlang
 -module(environment_controller).
--behaviour(elevator_controller).
-start_elevator() ->
-        elevator_controller:start_elevator(?MODULE, simulator).
+-behaviour(elevator_driver).
 
-event_button_pressed(Button) ->
-	io:format("Button ~p was pressed~n",[Button]).
+start_elevator() ->
+        elevator_driver:start_elevator(?MODULE, simulator).
+
+event_button_pressed({ButtonType, Floor}) ->
+	elevator_driver:set_button_light(ButtonType, Floor, on).
 
 event_reached_new_floor(Floor) -> 
-	io:format("Floor ~p was reached~n",[Floor]).
+	elevator_driver:set_floor_indicator(Floor).
 ```
 
-#Simulator
+###Simulator
 The driver also includes a [simulator](https://github.com/TTK4145/Project/tree/master/simulator) which must be started separately if the driver are to work in _simulator_ mode. 
 
 - [ ] This should be done automatic

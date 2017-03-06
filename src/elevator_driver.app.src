@@ -1,7 +1,7 @@
 {application, elevator_driver,
  [{description, "Drives elevators at NTNU"},
   {vsn, "0.1.0"},
-  {registered, [elevator_driver]},
+  {registered, [elevator_driver, elevator_controller]},
   {applications,
    [kernel,
     stdlib
@@ -16,9 +16,7 @@
     {callback_module, environment_controller}
     ]},
   {modules,[elevator_controller, 
-            elevator_driver_sup, 
-            elevator_driver,
-            elevator_poller]},
+            elevator_driver]},
   {maintainers, ["AndreasVaage and busserull"]},
   {licenses, ["LICENSE.md"]},
   {links, ["http://www2.erlangcentral.org/wiki/?title=Writing_an_Erlang_Port_using_OTP_Principles"]}
