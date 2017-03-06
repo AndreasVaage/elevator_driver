@@ -47,6 +47,8 @@ set_button_light(up|down|internal, Floor :: integer(), on|off) -> ok.
 set_door_light(on|off) -> ok.
 set_floor_indicator(Floor :: integer()) -> ok.
 set_stop_light(on|off) -> ok.
+start_elevator(Module :: module(), simulator|elevator) -> 
+    {ok, Pid::pid()} | ignore | {error, {already_started, Pid::pid()} | term()}.
 ```
 
 ###Example

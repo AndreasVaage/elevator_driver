@@ -8,19 +8,22 @@
 
 %% API functions
 -export([
-         set_motor_dir/1,        %up/down/stop
-         set_button_light/3,     %up/down/internal , int , on/off
-         set_door_light/1,       %on/off
-         set_floor_indicator/1,  % int
-         set_stop_light/1        % on/off
+         set_motor_dir/1,
+         set_button_light/3,
+         set_door_light/1,
+         set_floor_indicator/1,
+         set_stop_light/1
         ]).
 
--callback event_button_pressed({up|down|internal, Floor :: integer()}) -> ok.
--callback event_reached_new_floor(Floor :: integer()) -> ok.
+-spec start_elevator(Module :: module(), simulator|elevator) -> 
+    {ok, Pid::pid()} | ignore | {error, {already_started, Pid::pid()} | term()}.
+
+-callback event_button_pressed({up|down|internal, Floor::integer()}) -> ok.
+-callback event_reached_new_floor(Floor::integer()) -> ok.
 -spec set_motor_dir(up|down|stop) -> ok.
 -spec set_button_light(up|down|internal, Floor :: integer(), on|off) -> ok.
 -spec set_door_light(on|off) -> ok.
--spec set_floor_indicator(Floor :: integer()) -> ok.
+-spec set_floor_indicator(Floor::integer()) -> ok.
 -spec set_stop_light(on|off) -> ok.
 
 %% gen_server callbacks
@@ -31,21 +34,23 @@
          code_change/3,
          terminate/2]).
 %% Server state
--record(state, {state ,port, top_floor, last_floor, poll_period, button_list,
-                elevator_type}).
-
+-record(state, {last_floor, button_list, elevator_type, port, callback_module,
+                top_floor = 3,
+                number_of_elevators = 1,
+                poll_period = 50,
+                external_program = "elevator_driver",
+                external_timeout = 3000
+                }).
 %%%----------------------------------------------------------------------
 %%% API
 %%%----------------------------------------------------------------------
 
-start_elevator(Module, ElevatorType) ->
-    application:set_env(elevator_driver, environment, ElevatorType),
-    start_elevator(Module).
- 
 start_elevator(Module) ->
-    application:set_env(elevator_driver, callback_module, Module),
-    {ok, ElevatorType} = application:get_env(elevator_driver, environment),
-    gen_server:start_link({local, ?MODULE}, elevator_driver, ElevatorType, []).
+    start_elevator(Module, simulator).
+ 
+start_elevator(Module, ElevatorType) ->
+    gen_server:start_link(
+        {local, ?MODULE}, elevator_driver, [Module, ElevatorType], []).
 
 set_motor_dir(Direction) ->
     gen_server:call(?MODULE, {elev_set_motor_dir, Direction}).
@@ -61,25 +66,25 @@ set_button_light(ButtonType, Floor, State) ->
 %%% Callback functions from gen_server
 %%%----------------------------------------------------------------------
 
-init(ElevatorType) ->
+init([Module, ElevatorType]) ->
     process_flag(trap_exit, true),
-    TopFloor = get_env(number_of_floors) - 1,
+    Rec = #state{},
+    TopFloor = Rec#state.top_floor,
+    io:format("Test output = ~p~n",[TopFloor]),
     State = #state{
     button_list = init_list([up, down, internal], lists:seq(0, TopFloor), 0),
-    poll_period = get_env(poll_period),
-    last_floor = unknown,
-    top_floor = TopFloor,
-    elevator_type = ElevatorType},
+    elevator_type = ElevatorType,
+    callback_module = Module},
     init_continue(State).
 
 init_continue(#state{elevator_type = elevator} = State) ->
     %Locate the executable
     PrivDir = code:priv_dir(elevator_driver),
-    {ok, ExtProg} = application:get_env(elevator_driver, extprog),
+    ExtProg = State#state.external_program,
     ExtProgWithPath = filename:join([PrivDir, ExtProg]),
 
     Port = open_port({spawn_executable, ExtProgWithPath}, [{packet,2}]),
-    {reply, 0} = call_port({elev_init, elevator}, Port),
+    {reply, 0} = call_port({elev_init, elevator}, Port, State#state.external_timeout),
     io:format("Elevator driver initialised.~n"),
     erlang:send_after(State#state.poll_period, self(), time_to_poll),
     {ok, State#state{port = Port}};
@@ -87,30 +92,29 @@ init_continue(#state{elevator_type = elevator} = State) ->
 init_continue(#state{elevator_type = simulator} = State) ->
     %Locate the executable
     PrivDir = code:priv_dir(elevator_driver),
-    {ok, ExtProg} = application:get_env(elevator_driver, extprog),
+    ExtProg = State#state.external_program,
     ExtProgWithPath = filename:join([PrivDir, ExtProg]),
 
     Port = open_port({spawn_executable, ExtProgWithPath}, [{packet,2}]),
-    {reply, 0} = call_port({elev_init, simulator}, Port),
+    {reply, 0} = call_port({elev_init, simulator}, Port, State#state.external_timeout),
     io:format("Elevator driver initialised.~n"),
     erlang:send_after(State#state.poll_period, self(), time_to_poll),
     {ok, State#state{port = Port}}.
 
 handle_call(Msg, _From, #state{port=Port, elevator_type=elevator} = State) ->
-    {Command, Reply} = call_port(Msg, Port),
+    {Command, Reply} = call_port(Msg, Port, State#state.external_timeout),
     {Command, Reply, State};
 
 handle_call(Msg, _From, #state{port=Port, elevator_type=simulator} = State) ->
-    {Command, Reply} = call_port(Msg, Port),
+    {Command, Reply} = call_port(Msg, Port, State#state.external_timeout),
     {Command, Reply, State}.
 
 handle_info(time_to_poll, State) ->
     %io:format("I am now polling for the ~pth time!~n",[Count]),
-    NewState = State#state{
-    button_list = poll_buttons(State#state.button_list, State#state.port),
-    last_floor = poll_floor(State#state.last_floor, State#state.port)},
+    NewState = poll_buttons(State),
+    NewNewState = poll_floor(NewState),
     erlang:send_after(State#state.poll_period, self(), time_to_poll),
-    {noreply, NewState};
+    {noreply, NewNewState};
 
 
 handle_info({'EXIT', Port, Reason}, #state{port = Port} = State) ->
@@ -135,62 +139,62 @@ terminate(Reason, #state{port = Port} = _State) ->
 
 %%%----------------------------------------------------------------------
 %%% Internal functions
-%%%----------------------------------------------------------------------
-get_env(Environment) -> 
-    {ok, Value} = application:get_env(elevator_driver, Environment),
-    Value.
-    
+%%%----------------------------------------------------------------------    
 init_list(L1, L2, Value) ->
     [{{X, Y}, Value} || X <- L1, Y <- L2].
 
-poll_buttons(List, Port) ->
-    N = 3*get_env(number_of_floors),
-    poll_buttons(List, N, Port).
+poll_buttons(#state{top_floor = TopFloor} = State) ->
+    N = 3*(TopFloor + 1),
+    poll_buttons(State, N).
 
-poll_buttons(List, 0, _Port) ->
-    List;
+poll_buttons(State, 0) ->
+    State;
 
-poll_buttons(List, N, Port) ->
+poll_buttons(State, N) ->
+    #state{button_list = List, port = Port, external_timeout = Timeout} = State,
     {Button, LastValue} = lists:nth(N, List),
-    case call_port({elev_get_order, Button}, Port) of
+    case call_port({elev_get_order, Button}, Port, Timeout) of
         {reply, LastValue} -> %No state change
-            poll_buttons(List, N-1, Port);
+            poll_buttons(State, N-1);
         {reply, 1} -> %Button pressed
-            Mod = get_env(callback_module),
+            Mod = State#state.callback_module,
             Mod:event_button_pressed(Button),
             NewList = lists:keyreplace(Button, 1, List, {Button, 1}),
-            poll_buttons(NewList, N-1, Port);
+            poll_buttons(State#state{button_list = NewList}, N-1);
         {reply, 0} -> %Button released
             NewList = lists:keyreplace(Button, 1, List, {Button, 0}),
-            poll_buttons(NewList, N-1, Port);
+             poll_buttons(State#state{button_list = NewList}, N-1);
         {stop, port_timeout} -> 
             exit(port_timeout);
         Undefined -> 
             io:format("Elevator driver undefined input: ~p~n",[Undefined])
     end.
 
-poll_floor(LastFloor, Port) ->
-    case call_port({elev_get_floor_sensor_signal}, Port) of
+poll_floor(State) ->
+    #state{
+    port = Port, last_floor = LastFloor, external_timeout = Timeout
+    } = State,
+    case call_port({elev_get_floor_sensor_signal}, Port, Timeout) of
         {reply, LastFloor} -> %No change
-            LastFloor;
+            State;
         {reply, 255} -> % We don´t care of leaving and arriving. yet.
-            LastFloor;
+            State;
         {reply, Floor} ->
-            Mod = get_env(callback_module),
+            Mod = State#state.callback_module,
             Mod:event_reached_new_floor(Floor),
-            Floor;
+            State#state{last_floor = Floor};
         {stop, port_timeout} ->
             exit(port_timeout)
     end.
 
-call_port(Msg, Port) ->
+call_port(Msg, Port, Timeout) ->
     port_command(Port, encode(Msg)),
     receive
         {Port, {data, [Data]}} ->
             {reply, Data}
     %% Prevent the gen_server from hanging indefinitely in case the
     %% spawned process is taking too long processing the request.
-    after get_env(timeout) -> 
+    after Timeout -> 
             {stop, port_timeout}
     end.
 
