@@ -25,7 +25,7 @@ int main()
           result[0] = 0;
           break;
       case(SET_MOTOR_DIRECTION_COMMAND):
-          elev_set_motor_direction(command_buffer[1]-1);
+          elev_set_motor_direction(command_buffer[1]);
           result[0] = 0;
           break;
       case(SET_DOOR_OPEN_LAMP_COMMAND):

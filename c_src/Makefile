@@ -13,7 +13,7 @@ C_SRC_OUTPUT ?= $(CURDIR)/../priv/elevator_driver
 
 UNAME_SYS := $(shell uname -s)
 ifeq ($(UNAME_SYS), Darwin)
-	C_SRC_DIR = $(CURDIR)/../simulator
+	C_SRC_DIR = $(CURDIR)
 	CC ?= cc
 	CFLAGS ?= -g -std=c99 -arch x86_64 -Wall -Wmissing-prototypes
 	LDFLAGS ?= -arch x86_64 -flat_namespace -undefined suppress

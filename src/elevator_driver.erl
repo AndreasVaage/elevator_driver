@@ -3,11 +3,9 @@
 
 -behavior(gen_server).
 
-%% External exports
--export([start_elevator/2, start_elevator/1]).
-
 %% API functions
 -export([
+         start_elevator/2,
          set_motor_dir/1,
          set_button_light/3,
          set_door_light/1,
@@ -18,13 +16,14 @@
 -spec start_elevator(Module :: module(), simulator|elevator) -> 
     {ok, Pid::pid()} | ignore | {error, {already_started, Pid::pid()} | term()}.
 
--callback event_button_pressed({up|down|internal, Floor::integer()}) -> ok.
--callback event_reached_new_floor(Floor::integer()) -> ok.
 -spec set_motor_dir(up|down|stop) -> ok.
 -spec set_button_light(up|down|internal, Floor :: integer(), on|off) -> ok.
 -spec set_door_light(on|off) -> ok.
 -spec set_floor_indicator(Floor::integer()) -> ok.
 -spec set_stop_light(on|off) -> ok.
+
+-callback event_button_pressed({up|down|internal, Floor::integer()}) -> ok.
+-callback event_reached_new_floor(Floor::integer()) -> ok.
 
 %% gen_server callbacks
 -export([init/1, 
@@ -39,15 +38,15 @@
                 number_of_elevators = 1,
                 poll_period = 50,
                 external_program = "elevator_driver",
-                external_timeout = 3000
+                external_timeout = 3000,
+                simulator_ip = {127,0,0,1},
+                simulator_port = 15657,
+                simulator_socket
                 }).
 %%%----------------------------------------------------------------------
 %%% API
 %%%----------------------------------------------------------------------
 
-start_elevator(Module) ->
-    start_elevator(Module, simulator).
- 
 start_elevator(Module, ElevatorType) ->
     gen_server:start_link(
         {local, ?MODULE}, elevator_driver, [Module, ElevatorType], []).
@@ -72,50 +71,44 @@ init([Module, ElevatorType]) ->
     TopFloor = Rec#state.top_floor,
     io:format("Test output = ~p~n",[TopFloor]),
     State = #state{
-    button_list = init_list([up, down, internal], lists:seq(0, TopFloor), 0),
+    button_list = combine_lists([up, down, internal], lists:seq(0,TopFloor), 0),
     elevator_type = ElevatorType,
     callback_module = Module},
     init_continue(State).
 
 init_continue(#state{elevator_type = elevator} = State) ->
-    %Locate the executable
     PrivDir = code:priv_dir(elevator_driver),
     ExtProg = State#state.external_program,
     ExtProgWithPath = filename:join([PrivDir, ExtProg]),
-
-    Port = open_port({spawn_executable, ExtProgWithPath}, [{packet,2}]),
-    {reply, 0} = call_port({elev_init, elevator}, Port, State#state.external_timeout),
-    io:format("Elevator driver initialised.~n"),
-    erlang:send_after(State#state.poll_period, self(), time_to_poll),
-    {ok, State#state{port = Port}};
+    Port = open_port({spawn_executable, ExtProgWithPath}, [{packet, 2}]),
+    {reply, 0} = 
+    call_elevator({elev_init, elevator}, Port, State#state.external_timeout),
+    init_finnish(State#state{port = Port});
 
 init_continue(#state{elevator_type = simulator} = State) ->
-    %Locate the executable
-    PrivDir = code:priv_dir(elevator_driver),
-    ExtProg = State#state.external_program,
-    ExtProgWithPath = filename:join([PrivDir, ExtProg]),
+    #state{simulator_ip = Ip, simulator_port = Port} = State,
+    {ok, Socket} = gen_tcp:connect(Ip, Port, [binary, {active, false}]),
+    gen_tcp:send(Socket, encode({elev_init, simulator})),
+    init_finnish(State#state{simulator_socket = Socket}).
 
-    Port = open_port({spawn_executable, ExtProgWithPath}, [{packet,2}]),
-    {reply, 0} = call_port({elev_init, simulator}, Port, State#state.external_timeout),
+init_finnish(State) ->
     io:format("Elevator driver initialised.~n"),
     erlang:send_after(State#state.poll_period, self(), time_to_poll),
-    {ok, State#state{port = Port}}.
+    {ok, State}.
 
-handle_call(Msg, _From, #state{port=Port, elevator_type=elevator} = State) ->
-    {Command, Reply} = call_port(Msg, Port, State#state.external_timeout),
+handle_call(Msg, _From, #state{port=Port, elevator_type = elevator} = State) ->
+    {Command, Reply} = call_elevator(Msg, Port, State#state.external_timeout),
     {Command, Reply, State};
 
-handle_call(Msg, _From, #state{port=Port, elevator_type=simulator} = State) ->
-    {Command, Reply} = call_port(Msg, Port, State#state.external_timeout),
-    {Command, Reply, State}.
+handle_call(Msg, _From, #state{elevator_type = simulator} = State) ->
+    gen_tcp:send(State#state.simulator_socket, encode(Msg)),
+    {reply,ok, State}.
 
 handle_info(time_to_poll, State) ->
-    %io:format("I am now polling for the ~pth time!~n",[Count]),
     NewState = poll_buttons(State),
     NewNewState = poll_floor(NewState),
     erlang:send_after(State#state.poll_period, self(), time_to_poll),
     {noreply, NewNewState};
-
 
 handle_info({'EXIT', Port, Reason}, #state{port = Port} = State) ->
     io:format("Port closed for reason: ~p~n",[Reason]),
@@ -139,8 +132,9 @@ terminate(Reason, #state{port = Port} = _State) ->
 
 %%%----------------------------------------------------------------------
 %%% Internal functions
-%%%----------------------------------------------------------------------    
-init_list(L1, L2, Value) ->
+%%%----------------------------------------------------------------------
+
+combine_lists(L1, L2, Value) ->
     [{{X, Y}, Value} || X <- L1, Y <- L2].
 
 poll_buttons(#state{top_floor = TopFloor} = State) ->
@@ -153,7 +147,13 @@ poll_buttons(State, 0) ->
 poll_buttons(State, N) ->
     #state{button_list = List, port = Port, external_timeout = Timeout} = State,
     {Button, LastValue} = lists:nth(N, List),
-    case call_port({elev_get_order, Button}, Port, Timeout) of
+    Return = case State#state.elevator_type of
+        simulator ->
+            call_simulator({elev_get_order, Button}, State#state.simulator_socket, Timeout);
+        elevator ->
+            call_elevator({elev_get_order, Button}, Port, Timeout)
+        end,
+    case Return of
         {reply, LastValue} -> %No state change
             poll_buttons(State, N-1);
         {reply, 1} -> %Button pressed
@@ -174,20 +174,26 @@ poll_floor(State) ->
     #state{
     port = Port, last_floor = LastFloor, external_timeout = Timeout
     } = State,
-    case call_port({elev_get_floor_sensor_signal}, Port, Timeout) of
+    Return = case State#state.elevator_type of
+        simulator ->
+            call_simulator({elev_get_floor_sensor_signal}, State#state.simulator_socket, Timeout);
+        elevator ->
+            call_elevator({elev_get_floor_sensor_signal}, Port, Timeout)
+    end,
+    case Return of
         {reply, LastFloor} -> %No change
             State;
         {reply, 255} -> % We don´t care of leaving and arriving. yet.
             State;
-        {reply, Floor} ->
+        {reply, NewFloor} ->
             Mod = State#state.callback_module,
-            Mod:event_reached_new_floor(Floor),
-            State#state{last_floor = Floor};
+            Mod:event_reached_new_floor(NewFloor),
+            State#state{last_floor = NewFloor};
         {stop, port_timeout} ->
             exit(port_timeout)
     end.
 
-call_port(Msg, Port, Timeout) ->
+call_elevator(Msg, Port, Timeout) ->
     port_command(Port, encode(Msg)),
     receive
         {Port, {data, [Data]}} ->
@@ -198,25 +204,50 @@ call_port(Msg, Port, Timeout) ->
             {stop, port_timeout}
     end.
 
-encode({elev_init, elevator}) -> [1, 0];
-encode({elev_init, simulator}) -> [1, 1];
-encode({elev_set_motor_dir, stop}) -> [2, 1];
-encode({elev_set_motor_dir, up}) -> [2, 2];
-encode({elev_set_motor_dir, down}) -> [2, 0];
-encode({elev_set_door_open_lamp, off}) -> [3, 0];
-encode({elev_set_door_open_lamp, on}) -> [3, 1];
-encode({elev_get_obstruction_signal}) -> [4];
-encode({elev_get_stop_signal}) -> [5];
-encode({elev_set_stop_lamp, off}) -> [6, 0];
-encode({elev_set_stop_lamp, on}) -> [6, 1];
+call_simulator(Msg, Socket, Timeout) ->
+    gen_tcp:send(Socket, encode(Msg)),
+    case gen_tcp:recv(Socket, 4, Timeout) of
+        {ok, Packet} ->
+            {reply, decode(Packet)};
+        {error, closed} ->
+            {stop, simulator_socket_closed};
+        {error, timeout} ->
+            {stop, simulator_timeout};
+        {error, Reason} ->
+            {stop, Reason};
+        SomethingElse ->
+            io:format("call_simulator, gen_tcp:recv returned ~p~n",
+                [SomethingElse])
+    end.
+
+encode({elev_init, elevator}) -> [0, 0];
+encode({elev_init, simulator}) -> [0, 1];
+encode({elev_set_motor_dir, stop}) -> [1, 0];
+encode({elev_set_motor_dir, up}) -> [1, 1];
+encode({elev_set_motor_dir, down}) -> [1, 255];
+encode({elev_l, up, Floor, on}) -> [2, 0, Floor, 1];
+encode({elev_l, up, Floor, off}) -> [2, 0, Floor, 0];
+encode({elev_l, down, Floor, on}) -> [2, 1, Floor, 1];
+encode({elev_l, down, Floor, off}) -> [2, 1, Floor, 0];
+encode({elev_l, internal, Floor, on}) -> [2, 2, Floor, 1];
+encode({elev_l, internal, Floor, off}) -> [2, 2, Floor, 0];
+encode({elev_set_floor_indicator, Floor}) -> [3, Floor];
+encode({elev_set_door_open_lamp, off}) -> [4, 0];
+encode({elev_set_door_open_lamp, on}) -> [4, 1];
+encode({elev_set_stop_lamp, off}) -> [5, 0];
+encode({elev_set_stop_lamp, on}) -> [5, 1];
+encode({elev_get_order, {up, Floor}}) -> [6, 0, Floor];
+encode({elev_get_order, {down, Floor}}) -> [6, 1, Floor];
+encode({elev_get_order, {internal, Floor}}) -> [6, 2, Floor];
 encode({elev_get_floor_sensor_signal}) -> [7];
-encode({elev_set_floor_indicator, Floor}) -> [8, Floor];
-encode({elev_get_order, {up, Floor}}) -> [9, 0, Floor];
-encode({elev_get_order, {down, Floor}}) -> [9, 1, Floor];
-encode({elev_get_order, {internal, Floor}}) -> [9, 2, Floor];
-encode({elev_l, up, Floor, on}) -> [10, 0, Floor, 1];
-encode({elev_l, up, Floor, off}) -> [10, 0, Floor, 0];
-encode({elev_l, down, Floor, on}) -> [10, 1, Floor, 1];
-encode({elev_l, down, Floor, off}) -> [10, 1, Floor, 0];
-encode({elev_l, internal, Floor, on}) -> [10, 2, Floor, 1];
-encode({elev_l, internal, Floor, off}) -> [10, 2, Floor, 0].
+encode({elev_get_stop_signal}) -> [8];
+encode({elev_get_obstruction_signal}) -> [9].
+
+decode(<<6,1,0,0>>) -> 1;
+decode(<<6,0,0,0>>) -> 0;
+decode(<<7,1,Floor,0>>) -> Floor;
+decode(<<7,0,_Floor,0>>) -> 255;
+decode(<<8,0,0,0>>) -> 0;
+decode(<<8,1,0,0>>) -> 1;
+decode(<<9,0,0,0>>) -> 0;
+decode(<<9,1,0,0>>) -> 1.
