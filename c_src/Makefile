@@ -11,19 +11,11 @@ C_SRC_OUTPUT ?= $(CURDIR)/../priv/elevator_driver
 
 # System type and C compiler/flags.
 
-UNAME_SYS := $(shell uname -s)
-ifeq ($(UNAME_SYS), Darwin)
-	C_SRC_DIR = $(CURDIR)
-	CC ?= cc
-	CFLAGS ?= -g -std=c99 -arch x86_64 -Wall -Wmissing-prototypes
-	LDFLAGS ?= -arch x86_64 -flat_namespace -undefined suppress
+C_SRC_DIR = $(CURDIR)
+CC ?= gcc
+CFLAGS ?= -g -std=gnu11 -Wall -Wmissing-prototypes
+LDFLAGS = -lcomedi -pthread -lm -lerl_interface -lei -lnsl
 
-else ifeq ($(UNAME_SYS), Linux)
-	C_SRC_DIR = $(CURDIR)
-	CC ?= gcc
-	CFLAGS ?= -g -std=gnu11 -Wall -Wmissing-prototypes
-	LDFLAGS = -lcomedi -pthread -lm -lerl_interface -lei -lnsl
-endif
 
 SOURCES := $(shell find $(C_SRC_DIR) -name '*.c')
 OBJECTS = $(SOURCES:%.c=%.o)

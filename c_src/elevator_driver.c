@@ -1,15 +1,15 @@
 #include "elev.h"
 #include "elevator_driver.h"
 #include "erl_communication.h"
+#include <stdint.h>
 #include <assert.h>
 
 int main() 
 {
   while (1) {
-      assert(0 && "This is a test, delete me!!");
       byte command_buffer[MAX_COMMAND_SIZE];
       byte result[1];
-      
+      int8_t dir;
       if(!(read_cmd(command_buffer) > 0))
       {
       elev_set_motor_direction(0);
@@ -25,7 +25,8 @@ int main()
           result[0] = 0;
           break;
       case(SET_MOTOR_DIRECTION_COMMAND):
-          elev_set_motor_direction(command_buffer[1]);
+          dir = command_buffer[1];
+          elev_set_motor_direction(dir);
           result[0] = 0;
           break;
       case(SET_DOOR_OPEN_LAMP_COMMAND):
