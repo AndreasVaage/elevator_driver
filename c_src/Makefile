@@ -1,5 +1,3 @@
-# Based on c_src.mk from erlang.mk by Loic Hoguin <essen@ninenines.eu>
-
 CURDIR := $(shell pwd)
 BASEDIR := $(abspath $(CURDIR)/..)
 
@@ -42,6 +40,3 @@ rebuild:
 	clean all
 
 .PHONY: all rebuild clean
-
-
-

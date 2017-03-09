@@ -35,7 +35,7 @@ event_button_pressed({up|down|internal, Floor :: integer()}) -> ok.
 ```
 
 ```erlang
-event_reached_new_floor(Floor :: integer()) -> ok.
+event_reached_new_floor(Floor :: integer() | the_void) -> ok.
 ```
 They must be defined in the *Module*.
 

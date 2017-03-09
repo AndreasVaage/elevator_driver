@@ -2,7 +2,6 @@
 #include "elevator_driver.h"
 #include "erl_communication.h"
 #include <stdint.h>
-#include <assert.h>
 
 int main() 
 {
@@ -15,9 +14,6 @@ int main()
       elev_set_motor_direction(0);
       return 0;
       }
-      
-      
-      //assert(read_cmd(command_buffer) > 0 && "Brutal exit on external program");
       byte command = command_buffer[0];
       switch(command){
       case(INIT_COMMAND):
@@ -59,9 +55,6 @@ int main()
           break;
       }
       write_cmd(result, 1);
-      
-
   }
-
   return 0;
 }
