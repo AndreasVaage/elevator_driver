@@ -25,7 +25,7 @@ Implement the start function,
 
 ```erlang
 Start_fun() ->
-	elevator_driver:start_elevator(Module :: module(), simulator|elevator).
+	elevator_driver:start_link(Module :: module(), simulator|elevator).
 ```
 And the callback functions;
 The driver includes an elevator poller which requires two callback functions to call when an event occurs, currently they are:
@@ -47,7 +47,7 @@ set_button_light(up|down|internal, Floor :: integer(), on|off) -> ok.
 set_door_light(on|off) -> ok.
 set_floor_indicator(Floor :: integer()) -> ok.
 set_stop_light(on|off) -> ok.
-start_elevator(Module :: module(), simulator|elevator) -> 
+start_link(Module :: module(), simulator|elevator) -> 
     {ok, Pid::pid()} | ignore | {error, {already_started, Pid::pid()} | term()}.
 ```
 
@@ -78,7 +78,7 @@ User module:
 -behaviour(elevator_driver).
 
 start_elevator() ->
-        elevator_driver:start_elevator(?MODULE, simulator).
+        elevator_driver:start_link(?MODULE, simulator).
 
 event_button_pressed({ButtonType, Floor}) ->
 	elevator_driver:set_button_light(ButtonType, Floor, on).

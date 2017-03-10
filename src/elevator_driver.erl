@@ -4,11 +4,11 @@
 -behavior(gen_server).
 
 %% API functions
--export([start_elevator/2, set_motor_dir/1, set_button_light/3,
+-export([start_link/2, set_motor_dir/1, set_button_light/3,
          set_door_light/1, set_floor_indicator/1, set_stop_light/1]).
 
 %%% Interface to the callback module where this behaviour is used.
--spec start_elevator(Module :: module(), simulator|elevator) -> 
+-spec start_link(Module :: module(), simulator|elevator) -> 
     {ok, Pid::pid()} | ignore | {error, {already_started, Pid::pid()} | term()}.
 
 -spec set_motor_dir(up|down|stop) -> ok.
@@ -38,7 +38,7 @@
 %%% API
 %%%----------------------------------------------------------------------
 
-start_elevator(Module, ElevatorType) ->
+start_link(Module, ElevatorType) ->
     gen_server:start_link(
         {local, ?MODULE}, ?MODULE, [Module, ElevatorType], []).
 
