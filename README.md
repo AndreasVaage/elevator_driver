@@ -5,18 +5,19 @@ Erlang elevator driver used to control the elevators at the real time lab at NTN
 Hope this can let you focus on the fun parts of Erlang, and make the project better. If you find errors or make improvements it would be very nice if you sent a pull request, created a issue or made a new open source project. Such that we end up with a awesome driver and thus removes any doubt of which programming language that fits this project best.    
 
 ## Download
-#####Rebar3: 
+##### Rebar3 
 Not very well tested, but should work: add 
+
 ```erlang
 {elevator_driver, {git, "https://github.com/AndreasVaage/elevator_driver", {branch, "master"}}} 
 ```
 
 to your dependency list in the rebar.config file. You could also create a [_checkout folder](https://www.rebar3.org/docs/dependencies).
 
-#####Simple
+##### Simple
 Copy [elevator_driver.erl](src/elevator_driver.erl)  and the c_src folder to your project.
 
-##Usage
+## Usage
 Compile the c sources and make sure the path to the executable is correct such that *elevator_driver.erl* manages to spawn the executable *elevator*. Line 90 in *elevator_driver.erl*. 
 
 Then you can add the elevator_driver to a supervisors child specifications.
@@ -44,7 +45,7 @@ event_reached_new_floor(Floor :: integer() | the_void) -> ok.
 ```
 They must be defined in the *Module* passed as the first argument in the *start_link* function.
 
-###Functions
+### Functions
 
 ```erlang
 set_motor_dir(up|down|stop) -> 0.
@@ -67,7 +68,7 @@ start_link(Module :: module(), simulator|elevator|Configs).
     {simulator_port, integer() }          % Default 15657.
 ```
 
-###Example
+### Example
 supervisor:
 
 ```erlang 
@@ -103,7 +104,7 @@ event_reached_new_floor(Floor) ->
 	elevator_driver:set_floor_indicator(Floor).
 ```
 
-###Simulator
+### Simulator
 The driver can use the [simulator](https://github.com/TTK4145/Project/tree/master/simulator), but then the simulator must be running at the IP and port specified by the *Configs* in the *start_link* function. If none are specified it uses the default values 127.0.0.1 and 15657.  
 
 ## License
