@@ -2,7 +2,7 @@
 
 Erlang elevator driver used to control the elevators at the real time lab at NTNU, used in the [real time project](https://github.com/TTK4145/Project) in TTK4145. Implemented using [ports](http://erlang.org/doc/tutorial/c_port.html) to communicate between erlang and c. Inspired by Pete Kazmier´s [Writing An Erlang Port Using OTP Principles](http://www2.erlangcentral.org/wiki/?title=Writing_an_Erlang_Port_using_OTP_Principles), and Kjetil Kjeka´s [driver](https://github.com/kjetilkjeka/Real-time-elevator/blob/master). 
 
-Hope this can let you focus on the fun parts of Erlang, and make the project better. If you find errors or make improvements it would be very nice if you sent a pull request, created a issue or made a new open source project. Such that we end up with a awesome driver and thus removes any doubt of which programming language that fits this project best.    
+Hope this can let you focus on the fun parts of Erlang, and make the project better. If you find errors or make improvements it would be very nice if you sent a pull request, created a issue or made a new open source project. Such that we end up with an awesome driver and thus removes any doubt of which programming language fits this project the best.    
 
 ## Download
 ##### Rebar3 
