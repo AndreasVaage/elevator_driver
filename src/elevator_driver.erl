@@ -1,21 +1,22 @@
 -module(elevator_driver).
--author('andrevaa@stud.ntnu.no').
 
 -behavior(gen_server).
 
 %% API functions
 -export([start_link/2, set_motor_dir/1, set_button_light/3,
-         set_door_light/1, set_floor_indicator/1, set_stop_light/1]).
+         set_door_light/1, set_floor_indicator/1, set_stop_light/1,
+         get_floor/0]).
 
 %%% Interface to the callback module where this behaviour is used.
--spec start_link(Module :: module(), simulator|elevator) -> 
+-spec start_link(Module :: module(), Configs::list() | simulator | elevator) -> 
     {ok, Pid::pid()} | ignore | {error, {already_started, Pid::pid()} | term()}.
 
--spec set_motor_dir(up|down|stop) -> ok.
--spec set_button_light(up|down|int, Floor :: integer(), on|off) -> ok.
--spec set_door_light(on|off) -> ok.
--spec set_floor_indicator(Floor::integer()) -> ok.
--spec set_stop_light(on|off) -> ok.
+-spec set_motor_dir(up|down|stop) -> 0.
+-spec set_button_light(up|down|int, Floor :: integer(), on|off) -> 0.
+-spec set_door_light(on|off) -> 0.
+-spec set_floor_indicator(Floor::integer()) -> 0.
+-spec set_stop_light(on|off) -> 0.
+-spec get_floor() -> Floor :: integer() | the_void.
 
 -callback event_button_pressed({up|down|int, Floor::integer()}) -> ok.
 -callback event_reached_new_floor(Floor::integer() | the_void) -> ok.
@@ -26,9 +27,8 @@
 %% Server state
 -record(state, {last_floor, button_list, elevator_type, port, callback_module,
                 top_floor = 3,
-                number_of_elevators = 1,
                 poll_period = 50,
-                external_program = "elevator_driver",
+                external_program = "elevator",
                 external_timeout = 3000,
                 simulator_ip = {127,0,0,1},
                 simulator_port = 15657,
@@ -38,9 +38,9 @@
 %%% API
 %%%----------------------------------------------------------------------
 
-start_link(Module, ElevatorType) ->
+start_link(Module, Configs) ->
     gen_server:start_link(
-        {local, ?MODULE}, ?MODULE, [Module, ElevatorType], []).
+        {local, ?MODULE}, ?MODULE, {Module, Configs}, []).
 
 set_motor_dir(Direction) ->
     gen_server:call(?MODULE, {elev_set_motor_dir, Direction}).
@@ -52,47 +52,72 @@ set_floor_indicator(Floor) ->
     gen_server:call(?MODULE, {elev_set_floor_indicator, Floor}).
 set_button_light(ButtonType, Floor, State) ->
     gen_server:call(?MODULE, {elev_l, ButtonType, Floor, State}).
+get_floor() ->
+    gen_server:call(?MODULE, {elev_get_floor_sensor_signal}).
 %%%----------------------------------------------------------------------
 %%% Callback functions from gen_server
 %%%----------------------------------------------------------------------
 
-init([Module, ElevatorType]) ->
+init({Module, ElevatorType}) when is_atom(ElevatorType) ->
+    init({Module, [{elevator_type, ElevatorType}]});
+
+init({Module, Configs}) when is_list(Configs) ->
     process_flag(trap_exit, true),
-    Rec = #state{},
-    TopFloor = Rec#state.top_floor,
-    State = #state{
-    button_list = combine_lists([up, down, int], lists:seq(0,TopFloor), 0),
-    elevator_type = ElevatorType,
+    %%Helper function
+    Init_state = fun({Config, Value}, State) ->
+        case Config of
+            elevator_type -> State#state{elevator_type = Value};
+            top_floor -> State#state{top_floor = Value};
+            poll_period -> State#state{poll_period = Value};
+            external_program -> State#state{external_program = Value};
+            external_timeout -> State#state{external_timeout = Value};
+            simulator_ip -> State#state{simulator_ip = Value};
+            simulator_port -> State#state{simulator_port = Value}
+        end
+    end,    
+    State = lists:foldl(Init_state, #state{}, Configs),
+    NewState = State#state{
+    button_list = create_button_list(State#state.top_floor),
     callback_module = Module},
-    init_continue(State).
+    init_continue(NewState).
 
 init_continue(#state{elevator_type = elevator} = State) ->
-    PrivDir = code:priv_dir(elevator_driver),
+    PrivDir = "c_src",
     ExtProg = State#state.external_program,
     ExtProgWithPath = filename:join([PrivDir, ExtProg]),
     Port = open_port({spawn_executable, ExtProgWithPath}, [{packet, 2}]),
-    {reply, 0} = 
-    call_elevator({elev_init, elevator}, Port, State#state.external_timeout),
+    io:format("Port = ~p ~n", [Port]),
+    0 = call_elevator({elev_init, elevator}, Port, State#state.external_timeout),
     init_finish(State#state{port = Port});
 
 init_continue(#state{elevator_type = simulator} = State) ->
     #state{simulator_ip = Ip, simulator_port = Port} = State,
-    {ok, Socket} = gen_tcp:connect(Ip, Port, [binary, {active, false}]),
+    case gen_tcp:connect(Ip, Port, [binary, {active, false}]) of
+        {ok, Socket} ->
+            ok;
+        {error, Reason} ->
+            Socket = the_compiler_dont_trust_me,
+            throw({stop, Reason})
+    end,
     gen_tcp:send(Socket, encode({elev_init, simulator})),
     init_finish(State#state{simulator_socket = Socket}).
 
 init_finish(State) ->
-    io:format("Elevator driver initialised.~n"),
     erlang:send_after(State#state.poll_period, self(), time_to_poll),
     {ok, State}.
 
 handle_call(Msg, _From, #state{port=Port, elevator_type = elevator} = State) ->
-    0 = call_elevator(Msg, Port, State#state.external_timeout),
-    {reply, ok, State};
+    Reply = call_elevator(Msg, Port, State#state.external_timeout),
+    {reply, Reply, State};
+
+handle_call({elev_get_floor_sensor_signal} = Msg, _From, 
+    #state{elevator_type = simulator} = State) ->
+    #state{simulator_socket = Socket, external_timeout = Timeout} = State,
+    {reply, call_simulator(Msg, Socket, Timeout), State};
 
 handle_call(Msg, _From, #state{elevator_type = simulator} = State) ->
     ok = gen_tcp:send(State#state.simulator_socket, encode(Msg)),
-    {reply, ok, State}.
+    {reply, 0, State}.
 
 handle_info(time_to_poll, State) ->
     #state{external_timeout = Timeout, simulator_socket = Socket, port = Port,
@@ -137,33 +162,28 @@ handle_cast(_Msg, State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-terminate({port_terminated, Reason}, _State) ->
-    io:format("Terminating ~p, because port terminated for reason: ~p ~n",
-        [?MODULE, Reason]),
-    io:format("done~n");
-terminate(Reason, {port, Port}) ->
-    io:format("Terminating ~p, because: ~p!~n",[?MODULE, Reason]),
-    io:format("    Closing port~n"),
-    port_close(Port),
-    io:format("done~n");
-terminate(Reason, {socket, Socket}) ->
-    io:format("Terminating ~p, because: ~p!~n",[?MODULE, Reason]),
-    io:format("    Closing socket~n"),
-    gen_tcp:close(Socket),
-    io:format("done~n").
+terminate({port_terminated, _Reason}, _State) -> ok;
+terminate(_Reason, {port, Port}) ->
+    port_close(Port);
+terminate(_Reason, {socket, Socket}) ->
+    gen_tcp:close(Socket);
+terminate(_Reason, _State) -> ok.
 
 
 %%%----------------------------------------------------------------------
 %%% Internal functions
 %%%----------------------------------------------------------------------
 
-combine_lists(L1, L2, Value) ->
-    [{{X, Y}, Value} || X <- L1, Y <- L2].
+create_button_list(TopFloor) ->
+    [{{Type, Floor},0} || Type <- [int, up, down], Floor <- lists:seq(0, TopFloor), 
+    not(Floor =:= 0 andalso Type =:= down) and 
+    not(Floor =:= TopFloor andalso Type =:= up)].
 
 call_elevator(Msg, Port, Timeout) ->
     port_command(Port, encode(Msg)),
     receive
         {Port, {data, [Data]}} ->
+            %io:format("Port got: ~p ~n", [Data]),
             decode(Data)
     %% Prevent the gen_server from hanging indefinitely in case the
     %% spawned process is taking too long processing the request.

@@ -17,7 +17,7 @@ int main()
       byte command = command_buffer[0];
       switch(command){
       case(INIT_COMMAND):
-          elev_init(command_buffer[1]);
+          elev_init();
           result[0] = 0;
           break;
       case(SET_MOTOR_DIRECTION_COMMAND):

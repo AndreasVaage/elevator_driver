@@ -1,42 +1,36 @@
-CURDIR := $(shell pwd)
-BASEDIR := $(abspath $(CURDIR)/..)
+# Which compiler to use
+CC = gcc
 
-PROJECT ?= $(notdir $(BASEDIR))
-PROJECT := $(strip $(PROJECT))
+# Compiler flags go here.
+CFLAGS = -std=gnu11 -g -Wall -Wextra
 
+# Linker flags go here.
+LDFLAGS = -lcomedi -lm
 
-C_SRC_OUTPUT ?= $(CURDIR)/../priv/elevator_driver
-
-# System type and C compiler/flags.
-
-C_SRC_DIR = $(CURDIR)
-CC ?= gcc
-CFLAGS ?= -g -std=gnu11 -Wall -Wmissing-prototypes
-LDFLAGS = -lcomedi -pthread -lm -lerl_interface -lei -lnsl
-
-
-SOURCES := $(shell find $(C_SRC_DIR) -name '*.c')
-OBJECTS = $(SOURCES:%.c=%.o)
+# list of sources
+ELEVSRC = elev.c io.c erl_communication.c elevator_driver.c
 
 # program executable file name.
-TARGET = $(C_SRC_OUTPUT)
+TARGET = elevator
 
 # top-level rule, to compile everything.
-all:$(TARGET)
+all: $(TARGET)
+
+# Define all object files.
+ELEVOBJ = $(ELEVSRC:.c=.o)
 
 # rule to link the program
-$(TARGET): $(OBJECTS)
-	$(CC) -o $@ $^ $(LDFLAGS)
+$(TARGET): $(ELEVOBJ)
+	$(CC) $^ -o $@ $(LDFLAGS)
 
 # Compile: create object files from C source files.
 %.o : %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@ 
 
 # rule for cleaning re-compilable files.
 clean:
-	rm -f $(TARGET) $(OBJECTS)
+	rm -f $(TARGET) $(ELEVOBJ)
 
-rebuild:
-	clean all
+rebuild:	clean all
 
 .PHONY: all rebuild clean

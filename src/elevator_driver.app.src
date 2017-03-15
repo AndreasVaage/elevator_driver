@@ -1,6 +1,6 @@
 {application, elevator_driver,
  [{description, "Drives elevators at NTNU"},
-  {vsn, "0.1.0"},
+  {vsn, "1.0.0"},
   {registered, [elevator_driver]},
   {applications,
    [kernel,
